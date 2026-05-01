@@ -22,6 +22,7 @@ calling `flush()` and slicing the tail.
 from __future__ import annotations
 
 import io
+from fractions import Fraction
 from typing import Iterable, Optional, Tuple
 
 import av
@@ -76,10 +77,27 @@ class FMP4Muxer:
         )
 
         # ── Video stream ──────────────────────────────────────────────
-        # We try h264_nvenc first (GPU encode), fall back to libx264 if the
-        # NVENC path isn't available.  PyAV doesn't always expose nvenc —
-        # the user can override with FFMPEG_VIDEO_CODEC env var if needed.
+        # NVENC vs libx264 — `add_stream` doesn't open the codec, errors
+        # only surface during encode. We probe up-front by attempting to
+        # construct a CodecContext for h264_nvenc.
+        use_nvenc = False
         try:
+            test_codec = av.codec.Codec("h264_nvenc", "w")
+            # Constructing succeeds for any registered encoder; a real
+            # availability check is to actually open it.
+            test_ctx = av.codec.CodecContext.create(test_codec, "w")
+            test_ctx.width = 16
+            test_ctx.height = 16
+            test_ctx.pix_fmt = "yuv420p"
+            test_ctx.time_base = Fraction(1, fps)
+            test_ctx.open()
+            test_ctx.close()
+            use_nvenc = True
+            logger.info("[Muxer] NVENC available — using GPU encoder")
+        except Exception as nvenc_err:
+            logger.warning(f"[Muxer] NVENC unavailable, using libx264: {nvenc_err}")
+
+        if use_nvenc:
             self.vstream = self._container.add_stream("h264_nvenc", rate=fps)
             self.vstream.options = {
                 "preset": "p1",          # fastest NVENC preset
@@ -90,8 +108,7 @@ class FMP4Muxer:
                 "level": "3.1",
                 "g": str(fps),           # GOP = 1s
             }
-        except Exception as nvenc_err:
-            logger.warning(f"NVENC unavailable, falling back to libx264: {nvenc_err}")
+        else:
             self.vstream = self._container.add_stream("libx264", rate=fps)
             self.vstream.options = {
                 "preset": "ultrafast",
@@ -176,7 +193,7 @@ class FMP4Muxer:
         for frame_bgr in frames_bgr:
             video_frame = av.VideoFrame.from_ndarray(frame_bgr, format="bgr24")
             video_frame.pts = self._frame_idx
-            video_frame.time_base = av.Rational(1, self.fps)
+            video_frame.time_base = Fraction(1, self.fps)
             for packet in self.vstream.encode(video_frame):
                 self._container.mux(packet)
             self._frame_idx += 1
@@ -192,7 +209,7 @@ class FMP4Muxer:
             )
             audio_frame.sample_rate = self.sample_rate
             audio_frame.pts = self._audio_samples_written
-            audio_frame.time_base = av.Rational(1, self.sample_rate)
+            audio_frame.time_base = Fraction(1, self.sample_rate)
             self._audio_samples_written += len(audio_pcm)
             for packet in self.astream.encode(audio_frame):
                 self._container.mux(packet)

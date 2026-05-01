@@ -123,14 +123,25 @@ class RealtimeEngine:
         if not CFG.avatars_root.exists():
             CFG.avatars_root.mkdir(parents=True, exist_ok=True)
 
-        names = [p.name for p in CFG.avatars_root.iterdir() if p.is_dir()]
+        # Each subdirectory is an avatar, except those starting with _ or .
+        # (used for things like 'source_images' that hold raw uploads).
+        # Also skip dirs that don't contain a source.png — they aren't avatars yet.
+        names = []
+        for p in CFG.avatars_root.iterdir():
+            if not p.is_dir():
+                continue
+            if p.name.startswith("_") or p.name.startswith("."):
+                continue
+            if not (p / "source.png").exists():
+                logger.info(f"[Engine] skipping '{p.name}' (no source.png)")
+                continue
+            names.append(p.name)
+
         if not names:
             logger.warning(
                 f"[Engine] No avatars found in {CFG.avatars_root}. "
                 f"Run prepare_avatar.py to create one."
             )
-            # Auto-generate a placeholder so the pod is still useful for
-            # smoke-testing the WS pipeline.
             self._generate_placeholder_avatar()
             names = ["default"]
 
