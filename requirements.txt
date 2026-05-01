@@ -1,0 +1,38 @@
+# ─── Web framework ───
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+websockets==13.1
+python-multipart==0.0.20
+
+# ─── HTTP client ───
+httpx==0.28.1
+aiohttp==3.11.11
+
+# ─── Video / audio ───
+av==13.1.0                      # PyAV — fmp4 muxing
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+imageio==2.36.1
+imageio-ffmpeg==0.5.1
+soundfile==0.12.1
+librosa==0.10.2.post1
+
+# ─── ML stack (compatible with MuseTalk 1.5) ───
+# torch is pre-installed in the RunPod base image (CUDA 12.1).
+# We pin torch versions only in Dockerfile, not here.
+diffusers==0.30.0
+transformers==4.46.0
+accelerate==1.1.1
+einops==0.8.0
+omegaconf==2.3.0
+
+# ─── MuseTalk dependencies ───
+openmim==0.3.9
+# mmcv / mmdet / mmpose are installed via mim in Dockerfile.
+# face-alignment and S3FD are bundled in the MuseTalk repo we clone.
+
+# ─── Utility ───
+python-dotenv==1.0.1
+pydantic==2.10.4
+loguru==0.7.3
+PyJWT==2.10.1
